@@ -163,6 +163,18 @@ def curtain_stop_command() -> OrviboControlCommand:
     return OrviboControlCommand("stop", 0)
 
 
+def is_supported_curtain(device: OrviboDevice) -> bool:
+    """Return whether this integration creates a cover for the device.
+
+    Covers are limited to device type 34. A type-34 device that shares an
+    Allone hub UID uses RF open/close/stop; every other type 34 uses the
+    position commands. Type 127 is not a cover: no published command map
+    identifies it, so it must not be treated as type 34.
+    """
+
+    return device.device_type == "34"
+
+
 def is_rf_curtain(device: OrviboDevice, devices: Iterable[OrviboDevice]) -> bool:
     """Identify a type-34 curtain sharing an Allone hub's hardware UID.
 
@@ -170,7 +182,7 @@ def is_rf_curtain(device: OrviboDevice, devices: Iterable[OrviboDevice]) -> bool
     hub UID, including when the hub itself is not selected in HA.
     """
 
-    return device.device_type == "34" and bool(device.cloud_uid) and any(
+    return is_supported_curtain(device) and bool(device.cloud_uid) and any(
         hub.device_type in {"30", "67"} and hub.cloud_uid == device.cloud_uid
         for hub in devices
     )
