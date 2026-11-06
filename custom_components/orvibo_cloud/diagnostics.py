@@ -9,6 +9,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_EMAIL
 from homeassistant.core import HomeAssistant
 
+from .classification import cover_classification, diagnostic_number
 from .const import CONF_PASSWORD_HASH, CONF_USER_ID, DOMAIN
 from .control import is_allone_tv, is_rf_curtain, tv_commands_for_profile
 from .coordinator import OrviboCloudCoordinator
@@ -29,6 +30,12 @@ async def async_get_config_entry_diagnostics(
         "last_update_success": coordinator.last_update_success,
         "family_count": len(coordinator.data.families),
         "device_count": len(coordinator.data.devices),
+        "rf_cover_gate": {
+            "cover_device_type": "34",
+            "rf_hub_device_types": ["30", "67"],
+            "type_127_commands": "withheld",
+            "percentage_position": "type_34_without_shared_allone_uid_only",
+        },
         "device_discovery_error": coordinator.device_discovery_error,
         "privacy_device_discovery_error": (
             coordinator.privacy_device_discovery_error
@@ -47,11 +54,14 @@ async def async_get_config_entry_diagnostics(
                 "room": device.room,
                 "parent_uid": "**REDACTED**" if device.parent_uid else "",
                 "online": device.online,
-                "value1": device.value1,
-                "value2": device.value2,
-                "value3": device.value3,
-                "value4": device.value4,
+                "value1": diagnostic_number(device.value1),
+                "value2": diagnostic_number(device.value2),
+                "value3": diagnostic_number(device.value3),
+                "value4": diagnostic_number(device.value4),
                 "has_control_uid": bool(device.cloud_uid),
+                "classification": cover_classification(
+                    device, coordinator.data.devices
+                ),
                 "control_profile": (
                     "allone_rf" if is_rf_curtain(device, coordinator.data.devices)
                     else "allone_tv" if is_allone_tv(device, coordinator.data.devices)

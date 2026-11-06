@@ -1,5 +1,18 @@
 # Validation status and limitations
 
+## Automated checks for v1.3.3
+
+Version 1.3.3 adds `tests/test_type127_classification.py`. It parses a
+synthetic, redacted device table containing an Allone Pro (type 67), type 127
+rows, a type 34 RF curtain, a type 34 position curtain, a type 35 roller and
+a type 6 TV. The tests check that only type 34 creates a cover, that the
+existing RF button command is unchanged and is not selected for type 127, and
+that the diagnostic summary omits identifiers and learned payloads.
+
+These tests do not start Home Assistant, connect to `homemate.orvibo.com`, or
+transmit to a motor. A real type 127 installation has not been command-tested.
+The local suite is 25 tests, including the previous 16.
+
 ## Automated checks for v1.3.2
 
 The GitHub Actions workflow `.github/workflows/validate.yml` runs:
@@ -9,7 +22,7 @@ The GitHub Actions workflow `.github/workflows/validate.yml` runs:
 - **Hassfest Validation** using `home-assistant/actions/hassfest@master`.
 - **Packaging and Python checks** for manifest structure, HACS metadata,
   repository layout, version formatting, and Python compilation, plus TLS and
-  listener regression tests. The suite contains 16 tests.
+  listener regression tests. The v1.3.2 suite contained 16 tests.
 
 For local verification, run:
 

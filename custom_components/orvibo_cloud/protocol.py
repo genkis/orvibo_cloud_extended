@@ -7,6 +7,12 @@ import hashlib
 import hmac
 from typing import Any, Final, Mapping
 
+from .classification import (
+    DeviceRowSummary,
+    merge_summaries,
+    summarize_device_rows,
+)
+
 _HMAC_SECRET: Final = "nQ45RjPtOws96jmH"
 
 
@@ -36,6 +42,7 @@ class OrviboDevice:
     value3: int | None = None
     value4: int | None = None
     properties: Mapping[str, Any] = field(default_factory=dict)
+    row_summary: DeviceRowSummary = field(default_factory=DeviceRowSummary)
 
 
 def password_hash(password: str) -> str:
@@ -291,6 +298,9 @@ def parse_readtable_devices(payload: Mapping[str, Any]) -> tuple[OrviboDevice, .
             value3=values[2],
             value4=values[3],
             properties=properties_by_device.get(device_id, {}),
+            row_summary=summarize_device_rows(
+                item, statuses_by_device.get(device_id, {})
+            ),
         )
 
     # Some property-based devices, including door locks, only appear in the
@@ -336,6 +346,7 @@ def parse_readtable_devices(payload: Mapping[str, Any]) -> tuple[OrviboDevice, .
             value3=values[2],
             value4=values[3],
             properties=properties,
+            row_summary=summarize_device_rows(item),
         )
 
     return tuple(sorted(devices.values(), key=lambda device: device.uid))
@@ -456,6 +467,7 @@ def extract_devices(payloads: Any) -> tuple[OrviboDevice, ...]:
                     if isinstance(value.get("properties"), Mapping)
                     else {}
                 ),
+                row_summary=summarize_device_rows(value),
             )
             previous = devices.get(uid)
             if previous is None:
@@ -474,6 +486,9 @@ def extract_devices(payloads: Any) -> tuple[OrviboDevice, ...]:
                         else previous.online
                     ),
                     properties=candidate.properties or previous.properties,
+                    row_summary=merge_summaries(
+                        previous.row_summary, candidate.row_summary
+                    ),
                 )
 
         for child in value.values():

@@ -37,13 +37,12 @@ from .control import (
     curtain_position_from_orvibo,
     curtain_stop_command,
     is_rf_curtain,
+    is_supported_curtain,
     rf_curtain_command,
 )
 from .coordinator import OrviboCloudCoordinator
 from .protocol import OrviboDevice
 from .selection import device_is_selected
-
-_CURTAIN_DEVICE_TYPE = "34"
 
 
 async def async_setup_entry(
@@ -57,7 +56,7 @@ async def async_setup_entry(
     async_add_entities(
         OrviboCurtainCover(coordinator, device.uid)
         for device in coordinator.data.devices
-        if device.device_type == _CURTAIN_DEVICE_TYPE
+        if is_supported_curtain(device)
         and device_is_selected(entry.options, device.uid)
     )
 

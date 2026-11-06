@@ -49,14 +49,85 @@ The version also fixes diagnostics account-email redaction, prevents cloud refre
 
 ## Allone Pro RF blinds
 
-RF blinds associated with an Allone Pro or compatible hub expose **Open**,
-**Close**, and **Stop**. The integration detects their hub relationship from
-the discovered device list, even if the hub itself is not selected for addition
-to Home Assistant.
+This section applies to **device type 34** only. RF blinds associated with an
+Allone Pro (type 67) or Allone hub (type 30) expose **Open**, **Close**, and
+**Stop**. The integration detects their hub relationship from the discovered
+device list, even if the hub itself is not selected for addition to Home
+Assistant.
 
 RF commands do not provide a measured position. These covers use assumed
-state and do not expose a percentage slider. Directly controlled curtain
-motors retain their existing position support.
+state and do not expose a percentage slider. Directly controlled type 34
+curtain motors, which do not share that hub UID, retain their existing
+position support.
+
+## Device type 127
+
+Some Allone Pro accounts list named blinds as **device type 127** next to the
+type 67 hub. Those rows are selected and shown in the device registry, and
+this integration previously created no cover entity for them. That is still
+the case.
+
+Published command maps do not identify type 127:
+
+- This integration sends `order` `rf control` with the type 34 button codes
+  only when a type 34 device shares the hardware UID of a type 30 or 67 hub.
+- The published PowerMate P2 / Allone Pro shade integration uses that same
+  command for device types **34, 35, 39 and 42**. It does not list type 127.
+- LAN catalogs document type 34, and type 35 with subtype `-2`, as position
+  motors. Type 35 is therefore not enabled here, even when it shares a hub UID.
+
+Type 127 is not relabelled as type 34. A shared hub UID is not treated as
+proof that a row is a blind rather than another RF or infrared remote, and
+this build does not invent a payload. Open, Close, Stop and percentage are
+not added. A `value1` of 0 on these rows is not a position.
+
+### What the new diagnostics can show
+
+Download **Settings > Devices & services > ORVIBO Cloud > Download diagnostics**.
+For each device, `classification` reports:
+
+- `hub_association`: `allone_pro`, `allone`, `self_allone_pro`, `self_allone`,
+  `none`, or `missing_control_uid`. The hardware UID stays redacted.
+- `parent_link_present`: whether a parent or gateway id was present, not the id.
+- `cover_command`: `rf_open_close_stop`, `position`, `withheld`, or `not_a_cover`.
+- `withheld_reason`: why no cover command was selected.
+- `matches_powermate_rf_type`: true only for types 34, 35, 39 and 42.
+- `row`: field names, safe product labels such as `company`, short numeric
+  type codes, value shapes (`zero`, `percent`, `known_rf_open`,
+  `known_rf_close`, `known_rf_stop`, `other_number`, `text`), collection names,
+  lengths and child key names, and allowlisted order tokens such as
+  `rf control`.
+
+Learned code strings, unlisted order text, email addresses and identifiers are
+omitted. `value1` through `value4` in the device list remain visible when they
+are 0–100 or one of the three published button codes. Any other number is
+replaced with `**REDACTED**`.
+
+If a type 127 row has an empty `labels` object, no collection, and only
+`zero` or `empty` value shapes, the cloud row still does not identify a
+command. Do not replay type 34 button codes against it. A shape of
+`other_number` or `text` is also not the published type 34 command.
+
+### Install and rollback
+
+This build does not change the config-entry schema, device selections, or
+remembered-state options. It does not move blinds.
+
+Install over 1.3.2:
+
+1. Replace `/config/custom_components/orvibo_cloud/` with this version's
+   `custom_components/orvibo_cloud` folder. `manifest.json` must sit directly
+   inside that folder and report version `1.3.3`.
+2. Restart Home Assistant. Keep the existing integration entry.
+3. Download diagnostics and inspect type 127 `classification` objects.
+
+Roll back to 1.3.2:
+
+1. Replace the integration folder with the 1.3.2 files.
+2. Restart Home Assistant.
+3. Leave the integration entry in place. Rolling back does not require
+   deleting devices or options, because 1.3.3 does not write a new command
+   and does not migrate options.
 
 ### Optional remembered open/closed state
 
@@ -97,7 +168,9 @@ standard restore-state storage; an abrupt power loss can lose recent history.
 
 Redacted raw event capture can be enabled in the integration options while
 troubleshooting. Disable it when finished. It records unsolicited cloud
-events; it does not intercept commands sent by the phone app.
+events; it does not intercept commands sent by the phone app. The type 127
+classification above is separate: it summarizes the device table already
+returned to the integration and does not open a capture session.
 
 ## Credits and license
 
@@ -113,7 +186,8 @@ in [pull request #2](https://github.com/Kosztyk/orvibo_cloud/pull/2).
 The CI checks verify packaging, metadata and Python syntax. Version 1.3.2 adds
 local TLS handshake tests for legacy-CA compatibility, hostname and trust-chain
 rejection, plus rejected-login and bounded reconnect-backoff tests.
-The previous 51-check runtime test suite is not included in the public repository,
-so those earlier results are historical and not reproduced here. See
-[VALIDATION.md](VALIDATION.md) in the repository root for the scope and
-limits of the published checks.
+Version 1.3.3 adds synthetic device-table tests for type 127 classification.
+Those tests do not operate a blind. The previous 51-check runtime test suite
+is not included in the public repository, so those earlier results are
+historical and not reproduced here. See [VALIDATION.md](VALIDATION.md) in the
+repository root for the scope and limits of the published checks.
