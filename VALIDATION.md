@@ -11,7 +11,10 @@ that the diagnostic summary omits identifiers and learned payloads.
 
 These tests do not start Home Assistant, connect to `homemate.orvibo.com`, or
 transmit to a motor. A real type 127 installation has not been command-tested.
-The local suite is 25 tests, including the previous 16.
+The local suite is 26 tests, including the previous 16. One test locks the
+sanitized type 127 shape observed on 1.3.3: company `A-OK Motor`, Allone Pro
+association, no button list, and no published RF code. That test still does
+not transmit a command.
 
 ## Automated checks for v1.3.2
 

@@ -81,6 +81,17 @@ proof that a row is a blind rather than another RF or infrared remote, and
 this build does not invent a payload. Open, Close, Stop and percentage are
 not added. A `value1` of 0 on these rows is not a position.
 
+A 1.3.3 diagnostic download from one Allone Pro account showed 14 type 127
+rows with company `A-OK Motor`, an empty subtype, a shared model, a hardware
+UID shared with the type 67 hub, and no parent link. The rows were flat:
+`irDeviceId` and `deviceModelType` were present as single fields, not button
+lists. There was no `order`, no collection, and no value1–value3 other than
+zero. value4 was outside 0–100 and outside the published button codes
+380000, 380001 and 380002. Every row, including the hub, was reported
+offline. That is enough to keep commands withheld. It is not a command
+mapping. Company `A-OK Motor` is only a label; the published RF command is
+selected by device type 34, 35, 39 or 42, and these rows are type 127.
+
 ### What the new diagnostics can show
 
 Download **Settings > Devices & services > ORVIBO Cloud > Download diagnostics**.
