@@ -20,6 +20,11 @@ Type 34 curtains are unchanged: shared Allone UID still means open/close/stop
 with no percentage; other type 34 devices still use position. No config-entry
 schema change.
 
+A later check of one sanitized 1.3.3 download (14 type 127 rows, company
+`A-OK Motor`, Allone Pro association, no button list, no published RF code)
+did not reveal a command. No further diagnostic fields were added. A
+regression test locks that shape so it stays withheld.
+
 ## 1.3.2 — HACS reviewer fixes
 
 1. **Authenticated TLS:** port 10002 uses hostname checks and `ssl.CERT_REQUIRED` with the ORVIBO private CA bundled and fingerprint checked before loading it. The server trust anchor was corroborated against two public ORVIBO integration repositories and a certificate chain observed on the user's server. The CA is self-signed and its authenticity has not been confirmed by ORVIBO directly. `VERIFY_X509_STRICT` alone is relaxed because this 2018 CA has non-critical Basic Constraints; ordinary certificate-chain, validity and DNS hostname verification remain enabled. There is no `CERT_NONE` fallback.
