@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Iterable
+from functools import partial
 import math
 from homeassistant.exceptions import HomeAssistantError
 
-from .binary import OrviboBinaryError, control_device
+from .binary import OrviboBinaryError, control_device, hass_client_material
 from .const import CONF_FAMILY_ID, CONF_HOST
 from .control import is_allone_tv, lg_tv_button_command, tv_button_command
 from .entity import OrviboCloudDeviceEntity
@@ -75,21 +76,26 @@ class OrviboTVEntity(OrviboCloudDeviceEntity):
                         raise HomeAssistantError("The ORVIBO TV remote is unavailable")
                     entry_data = self.coordinator.entry.data
                     try:
+                        cert_path, key_path = hass_client_material(self.hass)
                         await self.hass.async_add_executor_job(
-                            control_device,
-                            entry_data[CONF_HOST],
-                            self.coordinator.data.binary_user_name,
-                            self.coordinator.data.binary_password,
-                            entry_data[CONF_FAMILY_ID],
-                            self._device_id,
-                            device.cloud_uid,
-                            command.order,
-                            command.value1,
-                            command.value2,
-                            command.value3,
-                            command.value4,
-                            command.properties,
-                            command.infrared,
+                            partial(
+                                control_device,
+                                entry_data[CONF_HOST],
+                                self.coordinator.data.binary_user_name,
+                                self.coordinator.data.binary_password,
+                                entry_data[CONF_FAMILY_ID],
+                                self._device_id,
+                                device.cloud_uid,
+                                command.order,
+                                command.value1,
+                                command.value2,
+                                command.value3,
+                                command.value4,
+                                command.properties,
+                                command.infrared,
+                                client_cert=cert_path,
+                                client_key=key_path,
+                            )
                         )
                     except (OrviboBinaryError, OSError, TimeoutError) as err:
                         raise HomeAssistantError(str(err)) from err

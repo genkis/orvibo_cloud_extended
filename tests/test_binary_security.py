@@ -70,6 +70,13 @@ class TLSConnectionTests(unittest.TestCase):
                 "-CA", f"{name}.pem", "-CAkey", f"{name}.key", "-CAcreateserial",
                 "-extfile", "server.ext", "-out", f"{name}-server.pem",
             )
+        openssl(
+            "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "2",
+            "-subj", "/CN=orvibo test client",
+            "-keyout", "client.key", "-out", "client.pem",
+        )
+        cls.client_cert = cls.root / "client.pem"
+        cls.client_key = cls.root / "client.key"
         cls.ca = cls.root / "trusted.pem"
         cls.fingerprint = hashlib.sha256(
             ssl.PEM_cert_to_DER_cert(cls.ca.read_text())
@@ -111,7 +118,14 @@ class TLSConnectionTests(unittest.TestCase):
             self.assertEqual(errors, [])
 
     def connect(self, host="localhost", server="trusted"):
-        client = binary.OrviboBinaryClient(host, "test", "test", "test")
+        client = binary.OrviboBinaryClient(
+            host,
+            "test",
+            "test",
+            "test",
+            client_cert=self.client_cert,
+            client_key=self.client_key,
+        )
         with self.server(server) as address:
             raw = socket.create_connection(address, timeout=5)
             with (
@@ -144,7 +158,14 @@ class TLSConnectionTests(unittest.TestCase):
             self.connect(server="untrusted")
 
     def test_changed_pinned_ca_fails_before_network_connection(self):
-        client = binary.OrviboBinaryClient("localhost", "test", "test", "test")
+        client = binary.OrviboBinaryClient(
+            "localhost",
+            "test",
+            "test",
+            "test",
+            client_cert=self.client_cert,
+            client_key=self.client_key,
+        )
         with (
             patch.object(binary, "_PINNED_SERVER_CA", self.ca),
             patch.object(binary.socket, "create_connection") as connection,
@@ -152,6 +173,103 @@ class TLSConnectionTests(unittest.TestCase):
         ):
             client._connect()
         connection.assert_not_called()
+
+
+class ClientMaterialTests(unittest.TestCase):
+    def test_config_directory_is_preferred(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config_cert = root / "config-cert.pem"
+            config_key = root / "config-key.pem"
+            package_cert = root / "package-cert.pem"
+            package_key = root / "package-key.pem"
+            for path in (config_cert, config_key, package_cert, package_key):
+                path.write_text("placeholder", encoding="ascii")
+            with (
+                patch.object(binary, "_PACKAGE_CERT_PATH", package_cert),
+                patch.object(binary, "_PACKAGE_KEY_PATH", package_key),
+            ):
+                resolved = binary.resolve_client_credentials(config_cert, config_key)
+        self.assertEqual(resolved, (config_cert, config_key))
+
+    def test_package_directory_is_used_only_when_present(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            package_cert = root / "package-cert.pem"
+            package_key = root / "package-key.pem"
+            package_cert.write_text("placeholder", encoding="ascii")
+            package_key.write_text("placeholder", encoding="ascii")
+            with (
+                patch.object(binary, "_PACKAGE_CERT_PATH", package_cert),
+                patch.object(binary, "_PACKAGE_KEY_PATH", package_key),
+            ):
+                resolved = binary.resolve_client_credentials(
+                    root / "missing-cert.pem", root / "missing-key.pem"
+                )
+        self.assertEqual(resolved, (package_cert, package_key))
+
+    def test_missing_material_is_a_logged_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with (
+                patch.object(binary, "_PACKAGE_CERT_PATH", root / "absent-cert.pem"),
+                patch.object(binary, "_PACKAGE_KEY_PATH", root / "absent-key.pem"),
+                self.assertLogs(binary._LOGGER, level="ERROR") as logs,
+                self.assertRaises(binary.OrviboBinaryError) as caught,
+            ):
+                binary.resolve_client_credentials(
+                    root / "missing-cert.pem", root / "missing-key.pem"
+                )
+        message = "\n".join(logs.output)
+        self.assertIn("orvibo_client_cert.pem", message)
+        self.assertIn("orvibo_client_key.pem", message)
+        self.assertIn("must supply", message)
+        self.assertIn("configuration directory", message)
+        self.assertNotIn("PRIVATE" + " KEY", message)
+        self.assertIn("ORVIBO client certificate files are missing", str(caught.exception))
+
+    def test_missing_material_does_not_open_a_socket(self):
+        client = binary.OrviboBinaryClient("localhost", "test", "test", "test")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with (
+                patch.object(binary, "_PACKAGE_CERT_PATH", root / "absent-cert.pem"),
+                patch.object(binary, "_PACKAGE_KEY_PATH", root / "absent-key.pem"),
+                patch.object(binary.socket, "create_connection") as connection,
+                self.assertRaises(binary.OrviboBinaryError),
+            ):
+                client._connect()
+        connection.assert_not_called()
+
+    def test_hass_config_path_names_the_config_directory(self):
+        class _Config:
+            def __init__(self) -> None:
+                self.calls: list[tuple[str, ...]] = []
+
+            def path(self, *parts: str) -> str:
+                self.calls.append(parts)
+                return "/config/" + "/".join(parts)
+
+        class _Hass:
+            def __init__(self) -> None:
+                self.config = _Config()
+
+        hass = _Hass()
+        cert, key = binary.hass_client_material(hass)
+        self.assertEqual(
+            (cert, key),
+            (
+                Path("/config/orvibo_cloud/orvibo_client_cert.pem"),
+                Path("/config/orvibo_cloud/orvibo_client_key.pem"),
+            ),
+        )
+        self.assertEqual(
+            hass.config.calls,
+            [
+                ("orvibo_cloud", "orvibo_client_cert.pem"),
+                ("orvibo_cloud", "orvibo_client_key.pem"),
+            ],
+        )
 
 
 class CaptureRetryTests(unittest.TestCase):

@@ -1,3 +1,5 @@
 __pycache__/
 *.py[cod]
 .venv/
+orvibo_client_cert.pem
+orvibo_client_key.pem

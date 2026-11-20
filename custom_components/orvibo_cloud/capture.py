@@ -14,7 +14,7 @@ from typing import Any, Final
 
 from homeassistant.core import HomeAssistant
 
-from .binary import OrviboBinaryClient, OrviboCaptureError
+from .binary import OrviboBinaryClient, OrviboCaptureError, hass_client_material
 from .const import ORVIBO_LOCK_EVENT
 
 _LOGGER = logging.getLogger(__name__)
@@ -237,7 +237,12 @@ class OrviboRawEventCapture:
         failures = 0
         while not self._stop_event.is_set():
             started_at = time.monotonic()
-            client = OrviboBinaryClient(*self._connection)
+            cert_path, key_path = hass_client_material(self._hass)
+            client = OrviboBinaryClient(
+                *self._connection,
+                client_cert=cert_path,
+                client_key=key_path,
+            )
             with self._socket_lock:
                 self._client = client
             retry_delay = _INITIAL_RECONNECT_DELAY_SECONDS

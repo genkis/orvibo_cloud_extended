@@ -11,7 +11,8 @@ that the diagnostic summary omits identifiers and learned payloads.
 
 These tests do not start Home Assistant, connect to `homemate.orvibo.com`, or
 transmit to a motor. A real type 127 installation has not been command-tested.
-The local suite is 25 tests, including the previous 16.
+The local suite is 30 tests, including the previous 16. Client-certificate
+checks generate a temporary self-signed credential and do not read a shipped key.
 
 ## Automated checks for v1.3.2
 
@@ -53,9 +54,10 @@ GitHub tree; this release does not claim to have reproduced those results.
 
 Never disclose ORVIBO account credentials, authentication tokens, personally
 identifying data or private device identifiers in public GitHub reports. Redact
-logs and diagnostics before sharing. The existing bundled ORVIBO client TLS
-credential files are unchanged in this packaging update and should be assessed
-separately for suitability of public distribution.
+logs and diagnostics before sharing. The ORVIBO client certificate and private
+key are not distributed in this repository. Supply `orvibo_client_cert.pem` and
+`orvibo_client_key.pem` in the Home Assistant configuration directory, and do
+not commit them.
 
 ## v1.3.2 review evidence
 

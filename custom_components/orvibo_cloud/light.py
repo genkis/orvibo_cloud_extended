@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import partial
 from typing import Any
 
 from homeassistant.components.light import (
@@ -17,7 +18,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .binary import OrviboBinaryError, control_device
+from .binary import OrviboBinaryError, control_device, hass_client_material
 from .const import (
     CONF_FAMILY_ID,
     CONF_HOST,
@@ -148,20 +149,25 @@ class _OrviboLightBase(
         if device is None or not device.cloud_uid:
             raise HomeAssistantError("ORVIBO control identifiers are missing")
         try:
+            cert_path, key_path = hass_client_material(self.hass)
             return await self.hass.async_add_executor_job(
-                control_device,
-                entry_data[CONF_HOST],
-                self.coordinator.data.binary_user_name,
-                self.coordinator.data.binary_password,
-                entry_data[CONF_FAMILY_ID],
-                self._device_id,
-                device.cloud_uid,
-                command.order,
-                command.value1,
-                command.value2,
-                command.value3,
-                command.value4,
-                command.properties,
+                partial(
+                    control_device,
+                    entry_data[CONF_HOST],
+                    self.coordinator.data.binary_user_name,
+                    self.coordinator.data.binary_password,
+                    entry_data[CONF_FAMILY_ID],
+                    self._device_id,
+                    device.cloud_uid,
+                    command.order,
+                    command.value1,
+                    command.value2,
+                    command.value3,
+                    command.value4,
+                    command.properties,
+                    client_cert=cert_path,
+                    client_key=key_path,
+                )
             )
         except (OrviboBinaryError, OSError, TimeoutError) as err:
             raise HomeAssistantError(str(err)) from err

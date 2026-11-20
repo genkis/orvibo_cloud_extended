@@ -31,8 +31,11 @@ _PORT: Final = 10002
 _HEADER_SIZE: Final = 42
 _MAX_DEVICE_PAGES: Final = 20
 _SESSION_RESPONSE_IDLE_TIMEOUT: Final = 0.2
-_CERT_PATH: Final = Path(__file__).with_name("orvibo_client_cert.pem")
-_KEY_PATH: Final = Path(__file__).with_name("orvibo_client_key.pem")
+_CLIENT_CERT_FILENAME: Final = "orvibo_client_cert.pem"
+_CLIENT_KEY_FILENAME: Final = "orvibo_client_key.pem"
+# Package copies are a fallback only. The integration does not distribute them.
+_PACKAGE_CERT_PATH: Final = Path(__file__).with_name(_CLIENT_CERT_FILENAME)
+_PACKAGE_KEY_PATH: Final = Path(__file__).with_name(_CLIENT_KEY_FILENAME)
 # Legacy ORVIBO 10002 self-signed CA corroborated in two established public
 # ORVIBO integrations and the user's TLS diagnostic; not a WebPKI root.
 _PINNED_SERVER_CA: Final = Path(__file__).with_name("orvibo_server_ca.pem")
@@ -167,9 +170,49 @@ def _safe_binary_error_detail(error: OrviboBinaryError) -> str:
         return "capture socket is not connected"
     if message == "ORVIBO capture connection was closed":
         return "capture connection was closed"
-    if message == "ORVIBO client certificate files are missing":
+    if message.startswith("ORVIBO client certificate files are missing"):
         return "client certificate files are missing"
     return "binary protocol operation failed"
+
+
+def hass_client_material(hass: Any) -> tuple[Path, Path]:
+    """Return the config-directory paths for the operator-supplied client material."""
+
+    return (
+        Path(hass.config.path("orvibo_cloud", "orvibo_client_cert.pem")),
+        Path(hass.config.path("orvibo_cloud", "orvibo_client_key.pem")),
+    )
+
+
+def resolve_client_credentials(
+    config_cert: Path | None = None,
+    config_key: Path | None = None,
+) -> tuple[Path, Path]:
+    """Prefer the Home Assistant config directory, then a package pair if present."""
+
+    if (
+        config_cert is not None
+        and config_key is not None
+        and config_cert.is_file()
+        and config_key.is_file()
+    ):
+        return config_cert, config_key
+    if _PACKAGE_CERT_PATH.is_file() and _PACKAGE_KEY_PATH.is_file():
+        return _PACKAGE_CERT_PATH, _PACKAGE_KEY_PATH
+    _LOGGER.error(
+        "ORVIBO client certificate files are missing. This integration does not "
+        "distribute orvibo_client_cert.pem or orvibo_client_key.pem. You must "
+        "supply both files in the Home Assistant configuration directory, at the "
+        "paths from hass.config.path('orvibo_cloud', 'orvibo_client_cert.pem') and "
+        "hass.config.path('orvibo_cloud', 'orvibo_client_key.pem'). Copies beside "
+        "the integration package are used only when those config-directory files "
+        "are absent."
+    )
+    raise OrviboBinaryError(
+        "ORVIBO client certificate files are missing; place "
+        "orvibo_client_cert.pem and orvibo_client_key.pem in the Home Assistant "
+        "configuration directory under orvibo_cloud/"
+    )
 
 
 class OrviboBinaryClient:
@@ -181,11 +224,15 @@ class OrviboBinaryClient:
         email: str,
         password_md5: str,
         family_id: str,
+        client_cert: Path | None = None,
+        client_key: Path | None = None,
     ) -> None:
         self._host = host
         self._email = email
         self._password_md5 = password_md5
         self._family_id = family_id
+        self._client_cert = client_cert
+        self._client_key = client_key
         self._socket: ssl.SSLSocket | None = None
         self._receive_buffer = bytearray()
         self._dynamic_key: bytes | None = None
@@ -344,8 +391,9 @@ class OrviboBinaryClient:
             self._socket = None
 
     def _connect(self) -> None:
-        if not _CERT_PATH.is_file() or not _KEY_PATH.is_file():
-            raise OrviboBinaryError("ORVIBO client certificate files are missing")
+        cert_path, key_path = resolve_client_credentials(
+            self._client_cert, self._client_key
+        )
 
         # Require system-trusted server certificate AND matching server hostname.
         # Never fall back to an insecure connection, including legacy servers.
@@ -374,7 +422,7 @@ class OrviboBinaryClient:
         context.verify_flags &= ~ssl.VERIFY_X509_STRICT
         context.check_hostname = True
         context.verify_mode = ssl.CERT_REQUIRED
-        context.load_cert_chain(_CERT_PATH, _KEY_PATH)
+        context.load_cert_chain(cert_path, key_path)
 
         raw_socket = socket.create_connection((self._host, _PORT), timeout=15)
         raw_socket.settimeout(15)
@@ -697,10 +745,19 @@ def discover_devices(
     email: str,
     password_md5: str,
     family_id: str,
+    client_cert: Path | None = None,
+    client_key: Path | None = None,
 ) -> tuple[OrviboDevice, ...]:
     """Executor-friendly entry point for ORVIBO device discovery."""
 
-    return OrviboBinaryClient(host, email, password_md5, family_id).discover()
+    return OrviboBinaryClient(
+        host,
+        email,
+        password_md5,
+        family_id,
+        client_cert=client_cert,
+        client_key=client_key,
+    ).discover()
 
 
 def control_device(
@@ -717,6 +774,8 @@ def control_device(
     value4: int = 0,
     properties: Mapping[str, Any] | None = None,
     infrared: OrviboInfrared | None = None,
+    client_cert: Path | None = None,
+    client_key: Path | None = None,
 ) -> tuple[int | None, int | None, int | None, int | None]:
     """Send one device command through ORVIBO's mutual-TLS cloud socket."""
 
@@ -725,6 +784,8 @@ def control_device(
         email,
         password_md5,
         family_id,
+        client_cert=client_cert,
+        client_key=client_key,
     ).control_device(
         device_id,
         device_uid,

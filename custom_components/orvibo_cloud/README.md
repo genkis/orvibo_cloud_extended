@@ -34,6 +34,21 @@ the default HACS catalog, the custom-repository step will no longer be needed.
 The integration folder must be `/config/custom_components/orvibo_cloud/`
 and contain `manifest.json` directly inside it.
 
+## Client certificate
+
+The mutual-TLS client certificate and private key are no longer distributed
+with this integration. Place `orvibo_client_cert.pem` and
+`orvibo_client_key.pem` in the Home Assistant configuration directory, under
+`orvibo_cloud/`. On a standard install those paths are
+`/config/orvibo_cloud/orvibo_client_cert.pem` and
+`/config/orvibo_cloud/orvibo_client_key.pem`. The integration loads
+`hass.config.path('orvibo_cloud', 'orvibo_client_cert.pem')` and
+`hass.config.path('orvibo_cloud', 'orvibo_client_key.pem')`. Copies beside the
+integration package are used only when the configuration-directory files are
+absent. If neither location contains both files, the port-10002 connection
+stops and the log explains that you must supply them. Do not commit the
+certificate or the private key.
+
 ## Cloud server
 
 Use the server that contains your app's devices. The available servers are

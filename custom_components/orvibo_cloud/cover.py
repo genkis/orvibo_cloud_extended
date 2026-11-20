@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 from datetime import datetime
+from functools import partial
 from typing import Any
 
 from homeassistant.components.cover import (
@@ -23,7 +24,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .binary import OrviboBinaryError, control_device
+from .binary import OrviboBinaryError, control_device, hass_client_material
 from .blind_state import AssumedBlindState, RFBlindOptions, configured_rf_blind_options
 from .const import (
     CONF_FAMILY_ID,
@@ -241,19 +242,24 @@ class OrviboCurtainCover(
         if device is None or not device.cloud_uid:
             raise HomeAssistantError("ORVIBO control identifiers are missing")
         try:
+            cert_path, key_path = hass_client_material(self.hass)
             reported_values = await self.hass.async_add_executor_job(
-                control_device,
-                entry_data[CONF_HOST],
-                self.coordinator.data.binary_user_name,
-                self.coordinator.data.binary_password,
-                entry_data[CONF_FAMILY_ID],
-                self._device_id,
-                device.cloud_uid,
-                command.order,
-                command.value1,
-                command.value2,
-                command.value3,
-                command.value4,
+                partial(
+                    control_device,
+                    entry_data[CONF_HOST],
+                    self.coordinator.data.binary_user_name,
+                    self.coordinator.data.binary_password,
+                    entry_data[CONF_FAMILY_ID],
+                    self._device_id,
+                    device.cloud_uid,
+                    command.order,
+                    command.value1,
+                    command.value2,
+                    command.value3,
+                    command.value4,
+                    client_cert=cert_path,
+                    client_key=key_path,
+                )
             )
         except (OrviboBinaryError, OSError, TimeoutError) as err:
             raise HomeAssistantError(str(err)) from err
