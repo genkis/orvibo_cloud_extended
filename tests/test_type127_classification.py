@@ -351,6 +351,120 @@ class Type127ClassificationTests(unittest.TestCase):
         self.assertNotIn(SECRET_UID, encoded)
         self.assertNotIn(SECRET_PAYLOAD, encoded)
 
+    def test_observed_aok_type127_shape_stays_withheld(self) -> None:
+        """Lock the sanitized 1.3.3 account shape. Stand-in numbers are not the account's hidden values."""
+
+        hub_uid = "observed-hub-uid"
+        sentinel_values = (
+            "IRID-SENTINEL",
+            "DMT-SENTINEL",
+            "EXT-SENTINEL",
+            "GDID-SENTINEL",
+            "PROFILE-SENTINEL",
+            "APP-SENTINEL",
+            "ZONE-SENTINEL",
+            "STATUS-SENTINEL",
+        )
+        blind = {
+            "deviceId": "observed-blind",
+            "uid": hub_uid,
+            "deviceName": "Kitchen blind",
+            "deviceType": 127,
+            "company": "A-OK Motor",
+            "model": "model_A",
+            "irDeviceId": sentinel_values[0],
+            "deviceModelType": sentinel_values[1],
+            "endpoint": 1,
+            "extAddr": sentinel_values[2],
+            "gdid": sentinel_values[3],
+            "profileID": sentinel_values[4],
+            "appDeviceId": sentinel_values[5],
+            "zoneId": sentinel_values[6],
+            "statusId": sentinel_values[7],
+            "alarmType": 0,
+            "authority": 0,
+            "version": "1",
+            "roomId": "room-1",
+            "createTimeSec": 1,
+            "updateTimeSec": 1,
+            "delFlag": 0,
+            "online": 0,
+            "value1": 0,
+            "value2": 0,
+            "value3": 0,
+            "value4": 250,
+        }
+        payload = {
+            "status": 0,
+            "data": {
+                "device": [
+                    {
+                        "deviceId": "observed-hub",
+                        "uid": hub_uid,
+                        "deviceName": "Allone Pro",
+                        "deviceType": 67,
+                        "model": "hub-model",
+                        "delFlag": 0,
+                        "online": 0,
+                    },
+                    blind,
+                ],
+                "deviceStatus": [
+                    {
+                        "deviceId": "observed-blind",
+                        "online": 0,
+                        "value1": 0,
+                        "value2": 0,
+                        "value3": 0,
+                        "value4": 250,
+                        "delFlag": 0,
+                    }
+                ],
+            },
+        }
+        devices = protocol.parse_readtable_devices(payload)
+        found = {device.uid: device for device in devices}
+        device = found["observed-blind"]
+        self.assertEqual(device.device_type, "127")
+        self.assertEqual(device.sub_device_type, "")
+        self.assertEqual(device.model, "model_A")
+        self.assertFalse(device.online)
+        self.assertFalse(device.parent_uid)
+        self.assertFalse(control.is_supported_curtain(device))
+        self.assertFalse(control.is_rf_curtain(device, devices))
+        report = classification.cover_classification(device, devices)
+        self.assertEqual(report["hub_association"], "allone_pro")
+        self.assertFalse(report["parent_link_present"])
+        self.assertEqual(report["cover_command"], "withheld")
+        self.assertEqual(
+            report["withheld_reason"],
+            "type_127_has_no_published_command_mapping",
+        )
+        self.assertFalse(report["matches_powermate_rf_type"])
+        row = report["row"]
+        self.assertEqual(row["labels"], {"company": "A-OK Motor"})
+        self.assertEqual(row["type_fields"], {"deviceType": "127"})
+        self.assertEqual(
+            row["value_shapes"],
+            {
+                "value1": "zero",
+                "value2": "zero",
+                "value3": "zero",
+                "value4": "other_number",
+            },
+        )
+        self.assertEqual(row["collections"], [])
+        self.assertEqual(row["allowlisted_orders"], [])
+        self.assertFalse(row["unlisted_order_present"])
+        self.assertIn("irDeviceId", row["field_names"])
+        self.assertIn("deviceModelType", row["field_names"])
+        encoded = json.dumps(report)
+        for secret in (*sentinel_values, hub_uid):
+            self.assertNotIn(secret, encoded)
+        self.assertNotIn("380000", encoded)
+        self.assertNotIn("250", encoded)
+        self.assertEqual(classification.diagnostic_number(250), "**REDACTED**")
+
     def test_cover_platform_uses_the_type_34_gate(self) -> None:
         source = (COMPONENT / "cover.py").read_text(encoding="utf-8")
         self.assertIn("is_supported_curtain(device)", source)
